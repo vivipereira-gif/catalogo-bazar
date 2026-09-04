@@ -133,6 +133,10 @@ A responsável pelo bazar precisa de uma área protegida para:
 - A migration `202609040002_reserved_products.sql` foi aplicada com sucesso no Supabase remoto e aparece sincronizada no histórico de migrations.
 - A ilustração do vestido na primeira dobra foi substituída por `public/hero-bazar-editorial.png`, uma fotografia editorial gerada para o projeto com conjunto de alfaiataria, bolsa e calçados na paleta da marca.
 - O selo “A partir de R$ 10” continua como HTML sobre a imagem, preservando nitidez, responsividade e acessibilidade visual.
+- Cada peça agora possui um SKU sequencial e imutável gerado pelo PostgreSQL no formato `AR-000001`.
+- A migration `202609040003_product_sku.sql` preencheu as peças existentes em ordem de cadastro e foi aplicada no Supabase remoto.
+- A tela administrativa “Peças” permite pesquisar tanto pelo SKU — com ou sem hífen — quanto pelo nome da peça, e exibe o código nos cartões, na visão geral e nas aprovações.
+- O SKU aparece nos detalhes e na sacola da vitrine e segue na mensagem enviada ao WhatsApp para facilitar a identificação pela Viviane.
 - Pendente no Dashboard do Supabase: revisar `Authentication > URL Configuration` e configurar SMTP próprio antes da produção.
 
 ### Ponto de retomada após a ativação

@@ -14,6 +14,7 @@ Catálogo responsivo com vitrine pública, pedido pelo WhatsApp e painel protegi
 - Arquivamento retira a peça da vitrine sem apagar o cadastro; exclusão permanente remove também fotos e vídeo do Storage.
 - Uma peça pode ser reservada temporariamente: ela sai da vitrine, mantém o estoque e pode voltar com um clique.
 - Peças marcadas como vendidas também podem voltar à vitrine; nesse retorno, uma unidade é restaurada automaticamente.
+- Cada peça recebe automaticamente um código sequencial único, como `AR-000042`; o painel pesquisa por código ou nome e o WhatsApp inclui esse código no pedido.
 - Convites por e-mail e permissões individuais por usuário.
 - Peças marcadas como vendidas ficam com estoque zero e saem da vitrine.
 - Vitrine ligada ao Supabase; sem configuração, o projeto usa dados demonstrativos.

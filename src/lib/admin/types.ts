@@ -35,6 +35,7 @@ export type ProductMedia = {
 
 export type AdminProduct = {
   id: string;
+  sku: string;
   name: string;
   description: string;
   price: number;

@@ -15,6 +15,7 @@ import {
   PackageCheck,
   Pencil,
   Plus,
+  Search,
   Send,
   Shirt,
   Sparkles,
@@ -82,19 +83,19 @@ const permissionLabels: Partial<Record<keyof Permissions, string>> = {
 
 const demoProducts: AdminProduct[] = [
   {
-    id: "demo-1", name: "Vestido midi floral", description: "Viscose leve, cintura marcada.", price: 49,
+    id: "demo-1", sku: "AR-000001", name: "Vestido midi floral", description: "Viscose leve, cintura marcada.", price: 49,
     size: "M", category: "Feminino", subtype: "Vestidos", stock: 1, status: "pending_review",
     featured: false, created_by: "helper-demo", creator_name: "Marina", review_note: null,
     created_at: new Date().toISOString(), product_media: [],
   },
   {
-    id: "demo-2", name: "Conjunto de linho", description: "Conjunto areia, ótimo estado.", price: 69,
+    id: "demo-2", sku: "AR-000002", name: "Conjunto de linho", description: "Conjunto areia, ótimo estado.", price: 69,
     size: "G", category: "Feminino", subtype: "Conjuntos", stock: 1, status: "published",
     featured: true, created_by: "viviane-demo", creator_name: "Viviane", review_note: null,
     created_at: new Date(Date.now() - 86400000).toISOString(), product_media: [],
   },
   {
-    id: "demo-3", name: "Bolsa caramelo", description: "Alça regulável e forro interno.", price: 35,
+    id: "demo-3", sku: "AR-000003", name: "Bolsa caramelo", description: "Alça regulável e forro interno.", price: 35,
     size: "Único", category: "Acessórios", subtype: null, stock: 1, status: "draft",
     featured: false, created_by: "viviane-demo", creator_name: "Viviane", review_note: null,
     created_at: new Date(Date.now() - 172800000).toISOString(), product_media: [],
@@ -225,7 +226,7 @@ export function AdminDashboard({
         {notice && <div className={styles.toast}><Check size={17} />{notice}</div>}
         {section === "overview" && <Overview counts={counts} products={products} go={setSection} name={currentUser.name} canReview={permissions.can_review_products} />}
         {section === "products" && <Products products={products} currentUserId={currentUser.id} permissions={permissions} updateProduct={updateProduct} reviewProduct={reviewProduct} manageProduct={manageProduct} editProduct={(product) => { setEditingProduct(product); setSection("edit"); }} />}
-        {section === "new" && <NewProduct currentUserId={currentUser.id} demoMode={demoMode} permissions={permissions} onCreated={(product) => { setProducts((items) => [product, ...items]); setSection("products"); announce(product.status === "published" ? "Peça publicada diretamente na vitrine." : product.status === "pending_review" ? "Peça enviada para aprovação." : "Rascunho salvo com sucesso."); }} />}
+        {section === "new" && <NewProduct currentUserId={currentUser.id} demoMode={demoMode} permissions={permissions} onCreated={(product) => { setProducts((items) => [product, ...items]); setSection("products"); announce(product.status === "published" ? `${product.sku} publicada diretamente na vitrine.` : product.status === "pending_review" ? `${product.sku} enviada para aprovação.` : `${product.sku} salva como rascunho.`); }} />}
         {section === "edit" && editingProduct && <EditProduct key={editingProduct.id} product={editingProduct} onCancel={() => { setEditingProduct(null); setSection("products"); }} onSave={async (patch) => { const saved = await updateProduct(editingProduct.id, patch); if (saved) { setEditingProduct(null); setSection("products"); announce("Alterações salvas com sucesso."); } return saved; }} />}
         {section === "approvals" && <Approvals products={products} reviewProduct={reviewProduct} />}
         {section === "team" && <Team demoMode={demoMode} members={team} setMembers={setTeam} currentUserId={currentUser.id} announce={announce} />}
@@ -262,7 +263,7 @@ function Stat({ icon, value, label, tone }: { icon: React.ReactNode; value: numb
 
 function ProductRows({ products }: { products: AdminProduct[] }) {
   if (!products.length) return <Empty text="Nenhuma peça por aqui ainda." />;
-  return <div className={styles.productRows}>{products.map((product) => <div className={styles.productRow} key={product.id}><MediaThumb product={product} /><div><strong>{product.name}</strong><small>{product.category}{product.subtype ? ` · ${product.subtype}` : ""} · Tam. {product.size}</small></div><b>{product.price.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</b><Status status={product.status} /></div>)}</div>;
+  return <div className={styles.productRows}>{products.map((product) => <div className={styles.productRow} key={product.id}><MediaThumb product={product} /><div><strong>{product.name}</strong><small><b>{product.sku}</b> · {product.category}{product.subtype ? ` · ${product.subtype}` : ""} · Tam. {product.size}</small></div><b>{product.price.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</b><Status status={product.status} /></div>)}</div>;
 }
 
 function MediaThumb({ product }: { product: AdminProduct }) {
@@ -282,7 +283,16 @@ function Products({ products, currentUserId, permissions, updateProduct, reviewP
   editProduct: (p: AdminProduct) => void;
 }) {
   const [filter, setFilter] = useState<ProductStatus | "all">("all");
-  const visible = filter === "all" ? products : products.filter((p) => p.status === filter);
+  const [query, setQuery] = useState("");
+  const normalizedQuery = query.trim().toLocaleLowerCase("pt-BR");
+  const compactQuery = query.toLocaleUpperCase("pt-BR").replace(/[^A-Z0-9]/g, "");
+  const visible = products.filter((product) => {
+    const matchesStatus = filter === "all" || product.status === filter;
+    const matchesQuery = !normalizedQuery ||
+      product.name.toLocaleLowerCase("pt-BR").includes(normalizedQuery) ||
+      product.sku.replace(/[^A-Z0-9]/g, "").includes(compactQuery);
+    return matchesStatus && matchesQuery;
+  });
 
   async function confirmDelete(product: AdminProduct) {
     const mediaNotice = product.product_media.length
@@ -294,7 +304,10 @@ function Products({ products, currentUserId, permissions, updateProduct, reviewP
 
   return <>
     <PageTitle eyebrow="Seu acervo" title="Todas as peças" text="Acompanhe o caminho de cada peça, do cadastro até a venda." />
-    <div className={styles.filters}>{(["all", "published", "reserved", "pending_review", "draft", "rejected", "sold", "hidden"] as const).map((item) => <button className={filter === item ? styles.selectedFilter : ""} key={item} onClick={() => setFilter(item)}>{item === "all" ? "Todas" : statusText[item]}</button>)}</div>
+    <div className={styles.productTools}>
+      <label className={styles.productSearch}><Search size={17} /><span>Buscar peça</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Código ou nome — ex.: AR-000042" /></label>
+      <div className={styles.filters}>{(["all", "published", "reserved", "pending_review", "draft", "rejected", "sold", "hidden"] as const).map((item) => <button className={filter === item ? styles.selectedFilter : ""} key={item} onClick={() => setFilter(item)}>{item === "all" ? "Todas" : statusText[item]}</button>)}</div>
+    </div>
     <section className={styles.panel}>{visible.length ? <div className={styles.cards}>{visible.map((product) => {
       const ownsEditableDraft = product.created_by === currentUserId && ["draft", "rejected"].includes(product.status) && permissions.can_edit_own_products;
       const managesCatalog = permissions.can_edit_all_products && permissions.can_publish_products;
@@ -304,7 +317,7 @@ function Products({ products, currentUserId, permissions, updateProduct, reviewP
       return <article className={styles.productCard} key={product.id}>
         <div className={styles.cardMedia}><MediaThumb product={product} />{product.featured && <span><Sparkles size={13} /> Destaque</span>}</div>
         <div className={styles.cardBody}>
-          <Status status={product.status} />
+          <header className={styles.cardLabels}><Status status={product.status} /><b>{product.sku}</b></header>
           <h3>{product.name}</h3>
           <p>{product.description || "Sem descrição"}</p>
           <div><strong>{product.price.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong><small>Estoque: {product.stock}</small></div>
@@ -330,7 +343,7 @@ function Products({ products, currentUserId, permissions, updateProduct, reviewP
 function Approvals({ products, reviewProduct }: { products: AdminProduct[]; reviewProduct: (p: AdminProduct, approve: boolean) => void }) {
   const pending = products.filter((p) => p.status === "pending_review");
   return <><PageTitle eyebrow="Curadoria" title="Aprovações" text="Só entra na vitrine o que você revisar e aprovar." />
-    <section className={styles.panel}>{pending.length ? <div className={styles.approvalList}>{pending.map((product) => <article key={product.id}><MediaThumb product={product} /><div><Status status={product.status} /><h3>{product.name}</h3><p>{product.description}</p><small>Enviado por {product.creator_name || "membro da equipe"} · {product.category}{product.subtype ? ` / ${product.subtype}` : ""} · Tam. {product.size}</small><strong>{product.price.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong></div><footer><button className={styles.secondary} onClick={() => reviewProduct(product, false)}><X size={16} /> Pedir ajuste</button><button className={styles.primary} onClick={() => reviewProduct(product, true)}><Check size={16} /> Aprovar e publicar</button></footer></article>)}</div> : <Empty text="Tudo revisado! Não há peças aguardando aprovação." />}</section>
+    <section className={styles.panel}>{pending.length ? <div className={styles.approvalList}>{pending.map((product) => <article key={product.id}><MediaThumb product={product} /><div><Status status={product.status} /><h3>{product.name}</h3><p>{product.description}</p><small><b>{product.sku}</b> · Enviado por {product.creator_name || "membro da equipe"} · {product.category}{product.subtype ? ` / ${product.subtype}` : ""} · Tam. {product.size}</small><strong>{product.price.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong></div><footer><button className={styles.secondary} onClick={() => reviewProduct(product, false)}><X size={16} /> Pedir ajuste</button><button className={styles.primary} onClick={() => reviewProduct(product, true)}><Check size={16} /> Aprovar e publicar</button></footer></article>)}</div> : <Empty text="Tudo revisado! Não há peças aguardando aprovação." />}</section>
   </>;
 }
 
@@ -365,7 +378,7 @@ function EditProduct({ product, onCancel, onSave }: {
 
   return <>
     <PageTitle
-      eyebrow="Editar anúncio"
+      eyebrow={`Editar anúncio · ${product.sku}`}
       title={product.name}
       text={product.status === "published" ? "As alterações salvas aparecem imediatamente na vitrine." : "Atualize as informações da peça."}
       action={<button className={styles.secondary} onClick={onCancel}>Cancelar edição</button>}
@@ -474,7 +487,7 @@ function NewProduct({ currentUserId, demoMode, permissions, onCreated }: { curre
     };
     try {
       if (demoMode) {
-        onCreated({ ...base, id: crypto.randomUUID(), status: targetStatus,
+        onCreated({ ...base, id: crypto.randomUUID(), sku: `AR-${String(Date.now()).slice(-6)}`, status: targetStatus,
           creator_name: "Você", review_note: null, created_at: new Date().toISOString(),
           product_media: media.map((item) => ({
             id: item.id, kind: item.kind, storage_path: item.storage_path, label: item.label,

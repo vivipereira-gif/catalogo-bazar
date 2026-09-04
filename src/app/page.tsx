@@ -13,7 +13,7 @@ export default async function Home() {
   const supabase = await createClient();
   const { data } = await supabase
     .from("products")
-    .select("id, name, description, price, size, category, subtype, stock, featured, product_media(*)")
+    .select("id, sku, name, description, price, size, category, subtype, stock, featured, product_media(*)")
     .eq("status", "published")
     .gt("stock", 0)
     .order("featured", { ascending: false })
@@ -21,6 +21,7 @@ export default async function Home() {
 
   const products: CatalogProduct[] = (data ?? []).map((product, index) => ({
     id: product.id,
+    sku: product.sku,
     name: product.name,
     description: product.description,
     price: Number(product.price),

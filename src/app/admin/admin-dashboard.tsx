@@ -26,7 +26,7 @@ import {
   Video,
   X,
 } from "lucide-react";
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { formatBytes, MEDIA_LIMITS } from "@/lib/media/constants";
@@ -227,7 +227,21 @@ export function AdminDashboard({
         {section === "overview" && <Overview counts={counts} products={products} go={setSection} name={currentUser.name} canReview={permissions.can_review_products} />}
         {section === "products" && <Products products={products} currentUserId={currentUser.id} permissions={permissions} updateProduct={updateProduct} reviewProduct={reviewProduct} manageProduct={manageProduct} editProduct={(product) => { setEditingProduct(product); setSection("edit"); }} />}
         {section === "new" && <NewProduct currentUserId={currentUser.id} demoMode={demoMode} permissions={permissions} onCreated={(product) => { setProducts((items) => [product, ...items]); setSection("products"); announce(product.status === "published" ? `${product.sku} publicada diretamente na vitrine.` : product.status === "pending_review" ? `${product.sku} enviada para aprovação.` : `${product.sku} salva como rascunho.`); }} />}
-        {section === "edit" && editingProduct && <EditProduct key={editingProduct.id} product={editingProduct} onCancel={() => { setEditingProduct(null); setSection("products"); }} onSave={async (patch) => { const saved = await updateProduct(editingProduct.id, patch); if (saved) { setEditingProduct(null); setSection("products"); announce("Alterações salvas com sucesso."); } return saved; }} />}
+        {section === "edit" && editingProduct && <EditProduct
+          key={editingProduct.id}
+          product={editingProduct}
+          currentUserId={currentUser.id}
+          demoMode={demoMode}
+          canManageMedia={permissions.can_upload_media}
+          onCancel={() => { setEditingProduct(null); setSection("products"); }}
+          onSaveDetails={(patch) => updateProduct(editingProduct.id, patch)}
+          onComplete={(productMedia) => {
+            setProducts((items) => items.map((item) => item.id === editingProduct.id ? { ...item, product_media: productMedia } : item));
+            setEditingProduct(null);
+            setSection("products");
+            announce("Alterações e mídias salvas com sucesso.");
+          }}
+        />}
         {section === "approvals" && <Approvals products={products} reviewProduct={reviewProduct} />}
         {section === "team" && <Team demoMode={demoMode} members={team} setMembers={setTeam} currentUserId={currentUser.id} announce={announce} />}
       </section>
@@ -349,21 +363,120 @@ function Approvals({ products, reviewProduct }: { products: AdminProduct[]; revi
 
 function Empty({ text }: { text: string }) { return <div className={styles.empty}><Shirt size={28} /><p>{text}</p></div>; }
 
-function EditProduct({ product, onCancel, onSave }: {
+type EditableMedia = ProductMedia | QueuedMedia;
+
+function isQueuedMedia(media: EditableMedia): media is QueuedMedia {
+  return "file" in media;
+}
+
+function normalizeMedia(items: EditableMedia[]) {
+  const sorted = [...items].sort((a, b) => a.sort_order - b.sort_order);
+  const cover = sorted.find((item) => item.kind === "image" && item.is_cover)
+    ?? sorted.find((item) => item.kind === "image");
+  return sorted.map((item, index) => ({
+    ...item,
+    sort_order: index,
+    is_cover: item.kind === "image" && item.id === cover?.id,
+  }));
+}
+
+function EditProduct({ product, currentUserId, demoMode, canManageMedia, onCancel, onSaveDetails, onComplete }: {
   product: AdminProduct;
+  currentUserId: string;
+  demoMode: boolean;
+  canManageMedia: boolean;
   onCancel: () => void;
-  onSave: (patch: Partial<AdminProduct>) => Promise<boolean>;
+  onSaveDetails: (patch: Partial<AdminProduct>) => Promise<boolean>;
+  onComplete: (media: ProductMedia[]) => void;
 }) {
   const [category, setCategory] = useState(product.category);
+  const [existingMedia, setExistingMedia] = useState(() => [...product.product_media].sort((a, b) => a.sort_order - b.sort_order));
+  const [queuedMedia, setQueuedMedia] = useState<QueuedMedia[]>([]);
+  const [removedMediaIds, setRemovedMediaIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [processing, setProcessing] = useState("");
   const [error, setError] = useState("");
+  const queuedMediaRef = useRef(queuedMedia);
+  const media = normalizeMedia([...existingMedia, ...queuedMedia]);
+
+  useEffect(() => {
+    queuedMediaRef.current = queuedMedia;
+  }, [queuedMedia]);
+
+  useEffect(() => () => {
+    if (!demoMode) queuedMediaRef.current.forEach((item) => URL.revokeObjectURL(item.preview));
+  }, [demoMode]);
+
+  async function addImages(files: FileList | null) {
+    if (!files || !canManageMedia) return;
+    const imageCount = media.filter((item) => item.kind === "image").length;
+    const availableSlots = MEDIA_LIMITS.maxImages - imageCount;
+    if (availableSlots < 1) return setError("Cada peça aceita no máximo 10 fotos.");
+    const selected = Array.from(files).slice(0, availableSlots);
+    setProcessing("Otimizando fotos…");
+    setError("");
+    try {
+      const results = await Promise.all(selected.map(processImage));
+      setQueuedMedia((items) => [...items, ...results.map((result, index) => {
+        const preview = URL.createObjectURL(result.file);
+        return {
+          id: crypto.randomUUID(), kind: "image" as const, file: result.file,
+          storage_path: "", label: imageCount === 0 && index === 0 ? "Frente" : "Detalhe",
+          sort_order: media.length + index, is_cover: imageCount === 0 && index === 0,
+          mime_type: result.file.type, size_bytes: result.processedBytes, duration_seconds: null,
+          width: result.width, height: result.height, preview, public_url: preview,
+          originalBytes: result.originalBytes,
+        };
+      })]);
+      if (selected.length < files.length) setError("Foram adicionadas somente as fotos que cabem no limite de 10.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível processar as fotos.");
+    } finally {
+      setProcessing("");
+    }
+  }
+
+  async function addVideo(file: File | undefined) {
+    if (!file || !canManageMedia || media.some((item) => item.kind === "video")) return;
+    setError("");
+    setProcessing("Preparando vídeo… 0%");
+    try {
+      const result = await processVideo(file, (value) => setProcessing(`Comprimindo vídeo… ${Math.round(value * 100)}%`));
+      const preview = URL.createObjectURL(result.file);
+      setQueuedMedia((items) => [...items, {
+        id: crypto.randomUUID(), kind: "video", file: result.file,
+        storage_path: "", label: "Vídeo", sort_order: media.length, is_cover: false,
+        mime_type: result.file.type, size_bytes: result.processedBytes, duration_seconds: result.duration,
+        width: result.width, height: result.height, preview, public_url: preview,
+        originalBytes: result.originalBytes,
+      }]);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível processar o vídeo.");
+    } finally {
+      setProcessing("");
+    }
+  }
+
+  function removeMedia(item: EditableMedia) {
+    if (!canManageMedia || busy) return;
+    if (isQueuedMedia(item)) {
+      URL.revokeObjectURL(item.preview);
+      setQueuedMedia((items) => items.filter((mediaItem) => mediaItem.id !== item.id));
+      return;
+    }
+    setExistingMedia((items) => items.filter((mediaItem) => mediaItem.id !== item.id));
+    setRemovedMediaIds((items) => [...items, item.id]);
+  }
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!media.some((item) => item.kind === "image")) {
+      return setError("Mantenha ou adicione ao menos uma foto da peça.");
+    }
     setBusy(true);
     setError("");
     const data = new FormData(event.currentTarget);
-    const saved = await onSave({
+    const details = {
       name: String(data.get("name")),
       description: String(data.get("description")),
       price: Number(data.get("price")),
@@ -371,9 +484,97 @@ function EditProduct({ product, onCancel, onSave }: {
       category,
       subtype: subtypes[category] ? String(data.get("subtype")) : null,
       size: String(data.get("size")),
-    });
-    if (!saved) setError("Não foi possível salvar as alterações. Revise os dados e tente novamente.");
-    setBusy(false);
+    };
+
+    try {
+      const detailsSaved = await onSaveDetails(details);
+      if (!detailsSaved) throw new Error("Não foi possível salvar as informações da peça.");
+
+      if (demoMode) {
+        onComplete(media.map((item) => ({
+          id: item.id, kind: item.kind, storage_path: item.storage_path, label: item.label,
+          sort_order: item.sort_order, is_cover: item.is_cover, mime_type: item.mime_type,
+          size_bytes: item.size_bytes, duration_seconds: item.duration_seconds,
+          width: item.width, height: item.height, public_url: item.public_url,
+        })));
+        return;
+      }
+
+      const supabase = createClient();
+      const uploadedFiles: Array<{ item: QueuedMedia; path: string; sort_order: number; is_cover: boolean }> = [];
+      const queuedById = new Map(queuedMedia.map((item) => [item.id, item]));
+
+      for (const [index, normalized] of media.entries()) {
+        const item = queuedById.get(normalized.id);
+        if (!item) continue;
+        setProcessing(`Enviando novo arquivo ${uploadedFiles.length + 1} de ${queuedMedia.length}…`);
+        let path = item.storage_path;
+        if (!path) {
+          const authorizationResponse = await fetch("/api/admin/storage/upload-url", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ productId: product.id, kind: item.kind }),
+          });
+          const authorization = await authorizationResponse.json();
+          if (!authorizationResponse.ok) throw new Error(authorization.error || "Não foi possível autorizar o envio do arquivo.");
+          path = String(authorization.path);
+          const { error: uploadError } = await supabase.storage
+            .from("product-media")
+            .uploadToSignedUrl(path, String(authorization.token), item.file, { contentType: item.mime_type });
+          if (uploadError) throw uploadError;
+          setQueuedMedia((items) => items.map((queued) => queued.id === item.id ? { ...queued, storage_path: path } : queued));
+        }
+        uploadedFiles.push({ item, path, sort_order: index, is_cover: normalized.is_cover });
+      }
+
+      if (removedMediaIds.length) {
+        setProcessing("Excluindo mídias removidas…");
+        const deleteResponse = await fetch("/api/admin/products/media", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ productId: product.id, mediaIds: removedMediaIds }),
+        });
+        const deletion = await deleteResponse.json();
+        if (!deleteResponse.ok) throw new Error(deletion.error || "Não foi possível excluir as mídias selecionadas.");
+        setRemovedMediaIds([]);
+      }
+
+      setProcessing("Organizando galeria…");
+      for (const normalized of media.filter((item) => !isQueuedMedia(item))) {
+        const { error: updateError } = await supabase
+          .from("product_media")
+          .update({ sort_order: normalized.sort_order, is_cover: normalized.is_cover })
+          .eq("id", normalized.id)
+          .eq("product_id", product.id);
+        if (updateError) throw updateError;
+      }
+
+      let uploadedMedia: ProductMedia[] = [];
+      if (uploadedFiles.length) {
+        const metadata = uploadedFiles.map(({ item, path, sort_order, is_cover }) => ({
+          product_id: product.id, kind: item.kind, storage_path: path, label: item.label,
+          sort_order, is_cover, mime_type: item.mime_type, size_bytes: item.size_bytes,
+          duration_seconds: item.duration_seconds, width: item.width, height: item.height,
+          created_by: currentUserId,
+        }));
+        const { data: savedMedia, error: mediaError } = await supabase.from("product_media").insert(metadata).select();
+        if (mediaError) throw mediaError;
+        uploadedMedia = (savedMedia ?? []).map((item) => ({
+          ...item,
+          public_url: supabase.storage.from("product-media").getPublicUrl(item.storage_path).data.publicUrl,
+        })) as ProductMedia[];
+      }
+
+      const normalizedExisting = media
+        .filter((item) => !isQueuedMedia(item))
+        .map((item) => ({ ...item })) as ProductMedia[];
+      onComplete([...normalizedExisting, ...uploadedMedia].sort((a, b) => a.sort_order - b.sort_order));
+    } catch (cause) {
+      setError(`${cause instanceof Error ? cause.message : "Não foi possível salvar."} As mídias que ainda aparecem nesta tela podem ser reenviadas ao tentar novamente.`);
+    } finally {
+      setBusy(false);
+      setProcessing("");
+    }
   }
 
   return <>
@@ -381,18 +582,23 @@ function EditProduct({ product, onCancel, onSave }: {
       eyebrow={`Editar anúncio · ${product.sku}`}
       title={product.name}
       text={product.status === "published" ? "As alterações salvas aparecem imediatamente na vitrine." : "Atualize as informações da peça."}
-      action={<button className={styles.secondary} onClick={onCancel}>Cancelar edição</button>}
+      action={<button className={styles.secondary} disabled={busy || Boolean(processing)} onClick={onCancel}>Cancelar edição</button>}
     />
     <form className={styles.productForm} onSubmit={save}>
       <section className={styles.formPanel}>
-        <div className={styles.formHeading}><span>1</span><div><h2>Mídias atuais</h2><p>As fotos e o vídeo serão preservados nesta edição.</p></div></div>
-        {product.product_media.length ? <div className={styles.mediaGrid}>{product.product_media.map((media) => (
-          <div className={styles.mediaPreview} key={media.id}>
-            {media.kind === "image" ? <img src={media.public_url || ""} alt={media.label || product.name} /> : <video src={media.public_url || ""} controls playsInline />}
-            {media.is_cover && <b>Capa</b>}
-            <small>{media.label || (media.kind === "image" ? "Foto" : "Vídeo")}</small>
-          </div>
-        ))}</div> : <Empty text="Esta peça ainda não possui mídia." />}
+        <div className={styles.formHeading}><span>1</span><div><h2>Fotos e vídeo</h2><p>{canManageMedia ? "Remova arquivos atuais ou adicione novas mídias antes de salvar." : "Você não possui permissão para alterar as mídias."}</p></div></div>
+        <div className={styles.mediaGrid}>
+          {media.map((item) => <div className={styles.mediaPreview} key={item.id}>
+            {item.kind === "image" ? <img src={isQueuedMedia(item) ? item.preview : item.public_url || ""} alt={item.label || product.name} /> : <video src={isQueuedMedia(item) ? item.preview : item.public_url || ""} controls={!isQueuedMedia(item)} muted={isQueuedMedia(item)} playsInline />}
+            {canManageMedia && <button type="button" disabled={busy || Boolean(processing)} onClick={() => removeMedia(item)} aria-label={`Remover ${item.label || (item.kind === "image" ? "foto" : "vídeo")}`}><X size={15} /></button>}
+            {item.is_cover && <b>Capa</b>}
+            <small>{isQueuedMedia(item) ? `Novo · ${formatBytes(item.size_bytes)}` : item.label || (item.kind === "image" ? "Foto" : "Vídeo")}</small>
+          </div>)}
+          {canManageMedia && media.filter((item) => item.kind === "image").length < MEDIA_LIMITS.maxImages && <label className={styles.uploader}><ImagePlus size={25} /><strong>Adicionar fotos</strong><span>JPG, PNG ou WebP</span><input hidden disabled={busy || Boolean(processing)} type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => { void addImages(event.target.files); event.target.value = ""; }} /></label>}
+          {canManageMedia && !media.some((item) => item.kind === "video") && <label className={styles.uploader}><Video size={25} /><strong>Adicionar vídeo</strong><span>Até 15s · saída máx. 6 MB</span><input hidden disabled={busy || Boolean(processing)} type="file" accept="video/*" onChange={(event) => { void addVideo(event.target.files?.[0]); event.target.value = ""; }} /></label>}
+        </div>
+        {!media.length && <Empty text="Esta peça ainda não possui mídia. Adicione ao menos uma foto." />}
+        {processing && <p className={styles.processing}><UploadCloud size={16} /> {processing}</p>}
       </section>
       <section className={styles.formPanel}>
         <div className={styles.formHeading}><span>2</span><div><h2>Informações da peça</h2><p>Edite preço, estoque, categoria e descrição.</p></div></div>
@@ -408,9 +614,9 @@ function EditProduct({ product, onCancel, onSave }: {
       </section>
       {error && <div className={styles.formError}>{error}</div>}
       <footer className={styles.formActions}>
-        <span>O status e as mídias atuais serão mantidos.</span>
-        <button type="button" className={styles.secondary} onClick={onCancel}>Cancelar</button>
-        <button className={styles.primary} disabled={busy}><Pencil size={16} /> {busy ? "Salvando…" : "Salvar alterações"}</button>
+        <span>O status da peça será mantido. As remoções só acontecem ao salvar.</span>
+        <button type="button" className={styles.secondary} disabled={busy || Boolean(processing)} onClick={onCancel}>Cancelar</button>
+        <button className={styles.primary} disabled={busy || Boolean(processing)}><Pencil size={16} /> {busy ? "Salvando…" : "Salvar alterações"}</button>
       </footer>
     </form>
   </>;

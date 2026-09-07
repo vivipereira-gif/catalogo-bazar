@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     admin.from("profiles").select("active").eq("id", userId).single(),
     admin
       .from("user_permissions")
-      .select("can_upload_media, can_edit_all_products")
+      .select("can_upload_media, can_edit_own_products, can_edit_all_products")
       .eq("user_id", userId)
       .single(),
     admin
@@ -35,7 +35,9 @@ export async function POST(request: Request) {
   ]);
 
   const ownsEditableDraft =
-    product?.created_by === userId && ["draft", "rejected"].includes(product.status);
+    product?.created_by === userId &&
+    permission?.can_edit_own_products &&
+    ["draft", "rejected"].includes(product.status);
   if (
     !profile?.active ||
     !permission?.can_upload_media ||

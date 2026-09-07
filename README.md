@@ -10,7 +10,7 @@ Catálogo responsivo com vitrine pública, pedido pelo WhatsApp e painel protegi
 - Painel em `/admin` com visão geral, cadastro, aprovações, estoque, destaques e equipe.
 - Fluxo `rascunho → aguardando aprovação → publicado` para o trabalho da assistente.
 - Viviane e usuários com permissão de publicação podem publicar diretamente na vitrine, sem etapa de aprovação.
-- Edição de informações de peças já cadastradas, preservando as mídias atuais.
+- Edição de informações e mídias de peças já cadastradas, permitindo adicionar ou remover fotos e vídeo com os mesmos limites do cadastro.
 - Arquivamento retira a peça da vitrine sem apagar o cadastro; exclusão permanente remove também fotos e vídeo do Storage.
 - Uma peça pode ser reservada temporariamente: ela sai da vitrine, mantém o estoque e pode voltar com um clique.
 - Peças marcadas como vendidas também podem voltar à vitrine; nesse retorno, uma unidade é restaurada automaticamente.

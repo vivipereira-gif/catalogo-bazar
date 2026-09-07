@@ -146,6 +146,9 @@ A responsável pelo bazar precisa de uma área protegida para:
 - Os detalhes oferecem compartilhamento nativo ou cópia do link e geram metadados com nome, descrição e foto para a prévia em aplicativos como o WhatsApp.
 - A implementação não adicionou migration nem alterou registros existentes: o slug é derivado em tempo de execução e a peça é localizada pelo SKU único.
 - Lint, TypeScript, build de produção, rota direta com peça real, redirecionamento canônico e resposta 404 foram validados.
+- A edição de peças agora permite remover mídias atuais e adicionar novas fotos ou vídeo, reaproveitando a otimização e os limites usados no cadastro.
+- As exclusões ficam pendentes até o salvamento; cancelar a edição preserva todos os arquivos atuais.
+- A remoção usa a rota protegida `/api/admin/products/media`, que valida sessão, conta ativa, permissão e vínculo com a peça antes de excluir metadados e arquivos do Storage.
 
 ### Ponto de retomada após a ativação
 

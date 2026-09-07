@@ -1,10 +1,9 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element -- imagens públicas vêm do storage e vídeos/fotos podem usar blob local. */
-
 import type { FormEvent } from "react";
 import { useMemo, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import {
   ArrowLeft,
   ArrowRight,
@@ -21,46 +20,12 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { currency, getProductMedia, productSlug, type CatalogProduct } from "@/lib/catalog/types";
+import { useCart } from "./cart-context";
+import { GarmentIllustration, ProductVisual } from "./product-visual";
 import styles from "./catalogo.module.css";
 
-type Garment =
-  | "dress"
-  | "shirt"
-  | "pants"
-  | "set"
-  | "cardigan"
-  | "skirt"
-  | "shoes"
-  | "bag"
-  | "home";
-
-export type CatalogProduct = {
-  id: string | number;
-  sku: string;
-  name: string;
-  price: number;
-  size: string;
-  category: string;
-  type: string;
-  condition: string;
-  quantity: number;
-  garment: Garment;
-  tone: string;
-  description: string;
-  featured: boolean;
-  media?: ProductMedia[];
-};
-
-type ProductMedia = {
-  id: string;
-  type: "image" | "video";
-  label: string;
-  view?: "front" | "back" | "detail";
-  url?: string;
-};
-
 type Product = CatalogProduct;
-type CartItem = Product & { cartQuantity: number };
 
 const WHATSAPP_NUMBER = "5535991923321";
 const ALL = "Todos";
@@ -291,73 +256,21 @@ const demoProducts: Product[] = ([
   },
 ] satisfies Array<Omit<Product, "sku">>).map((product, index) => ({ ...product, sku: `AR-${String(index + 1).padStart(6, "0")}` }));
 
-const currency = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-});
-
-function getProductMedia(product: Product): ProductMedia[] {
-  return product.media ?? [
-    { id: `${product.id}-capa`, type: "image", label: "Frente", view: "front" },
-  ];
-}
-
-function GarmentIllustration({ product, view = "front" }: { product: Product; view?: ProductMedia["view"] }) {
-  const common = {
-    fill: "currentColor",
-    stroke: "rgba(92, 67, 72, .18)",
-    strokeWidth: 1.5,
-  };
-  const viewClass = view === "back" ? styles.backView : view === "detail" ? styles.detailView : "";
-
-  return (
-    <div className={`${styles.productVisual} ${styles[product.tone]} ${viewClass}`}>
-      <span className={styles.imageLabel}>Foto demonstrativa</span>
-      <svg viewBox="0 0 220 260" role="img" aria-label={`Ilustração de ${product.name}`}>
-        {product.garment === "dress" && (
-          <>
-            <path {...common} d="M83 36c8 9 46 9 54 0l15 25-20 13 31 136c-34 18-72 18-106 0L88 74 68 61z" />
-            <path d="M92 40c2 18 34 18 36 0" fill="none" stroke="rgba(255,255,255,.6)" strokeWidth="3" />
-            <g fill="rgba(255,255,255,.63)"><circle cx="86" cy="114" r="4"/><circle cx="128" cy="98" r="5"/><circle cx="111" cy="152" r="4"/><circle cx="77" cy="178" r="5"/><circle cx="139" cy="187" r="4"/></g>
-          </>
-        )}
-        {product.garment === "shirt" && <path {...common} d="M78 44 94 34c7 11 25 11 32 0l16 10 40 42-25 22-19-20v130H82V88l-19 20-25-22z" />}
-        {product.garment === "pants" && <path {...common} d="M73 38h74l9 176-37 4-9-112-9 112-37-4z" />}
-        {product.garment === "set" && <><path {...common} d="M79 43 94 34c7 11 25 11 32 0l15 9 25 42-23 14-12-19v58H89V80L77 99 54 85z" /><path {...common} d="M87 146h46l22 72H65z" /></>}
-        {product.garment === "cardigan" && <><path {...common} d="M78 44 95 34c6 10 24 10 30 0l17 10 37 48-24 19-18-25v132H83V86l-18 25-24-19z" /><path d="M110 45v171" stroke="rgba(255,255,255,.7)" strokeWidth="3" /><g fill="rgba(255,255,255,.8)"><circle cx="116" cy="85" r="3"/><circle cx="116" cy="111" r="3"/><circle cx="116" cy="137" r="3"/><circle cx="116" cy="163" r="3"/></g></>}
-        {product.garment === "skirt" && <><path {...common} d="M82 49h56l27 169H55z" /><path d="M96 59 82 211M110 59v152M124 59l14 152" fill="none" stroke="rgba(255,255,255,.45)" strokeWidth="2" /></>}
-        {product.garment === "shoes" && <><path {...common} d="M45 157c34 1 50-30 60-69l29 10c-5 42 7 57 42 68 15 5 17 30-6 36H67c-31-1-43-17-22-45Z"/><path d="M66 165c36 6 61-15 66-55M45 187h137" fill="none" stroke="rgba(255,255,255,.58)" strokeWidth="4"/></>}
-        {product.garment === "bag" && <><path {...common} d="M50 94h120l13 119H37z"/><path d="M78 105V78c0-39 64-39 64 0v27" fill="none" stroke="currentColor" strokeWidth="12" strokeLinecap="round"/></>}
-        {product.garment === "home" && <><path {...common} d="M49 104h122l-13 111H62z"/><path d="M45 90h130v27H45z" fill="currentColor"/><path d="M79 91c4-48 58-48 62 0" fill="none" stroke="currentColor" strokeWidth="10"/></>}
-        {view === "back" && <path d="M110 52v154" fill="none" stroke="rgba(255,255,255,.5)" strokeWidth="2" strokeDasharray="5 5" />}
-      </svg>
-    </div>
-  );
-}
-
-function ProductVisual({ product, media }: { product: Product; media?: ProductMedia }) {
-  if (media?.url && media.type === "video") {
-    return <video className={styles.realProductImage} controls playsInline src={media.url}>Seu navegador não suporta vídeo.</video>;
-  }
-  if (media?.url) return <img className={styles.realProductImage} src={media.url} alt={`${product.name} — ${media.label}`} />;
-  return <GarmentIllustration product={product} view={media?.view} />;
-}
-
 type ProductCardProps = {
   product: Product;
   isFavorite: boolean;
   showFeatured?: boolean;
   onFavorite: (id: string | number) => void;
-  onOpen: (product: Product) => void;
   onAdd: (product: Product) => void;
 };
 
-function ProductCard({ product, isFavorite, showFeatured, onFavorite, onOpen, onAdd }: ProductCardProps) {
+function ProductCard({ product, isFavorite, showFeatured, onFavorite, onAdd }: ProductCardProps) {
+  const href = `/peca/${productSlug(product)}`;
   return (
     <article className={styles.productCard}>
-      <button className={styles.imageButton} type="button" onClick={() => onOpen(product)} aria-label={`Ver detalhes de ${product.name}`}>
+      <Link className={styles.imageButton} href={href} scroll={false} aria-label={`Ver detalhes de ${product.name}`}>
         <ProductVisual product={product} media={getProductMedia(product).find((item) => item.type === "image")} />
-      </button>
+      </Link>
       {showFeatured && <span className={styles.featuredBadge}><Sparkles size={12} /> Destaque</span>}
       {getProductMedia(product).length > 1 && <span className={styles.mediaCount}>{getProductMedia(product).length} mídias</span>}
       <button className={`${styles.favoriteButton} ${isFavorite ? styles.favoriteActive : ""}`} type="button" onClick={() => onFavorite(product.id)} aria-label={isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}>
@@ -368,7 +281,7 @@ function ProductCard({ product, isFavorite, showFeatured, onFavorite, onOpen, on
           <span>{product.type || product.category}</span>
           <span>Tam. {product.size}</span>
         </div>
-        <button className={styles.productTitle} type="button" onClick={() => onOpen(product)}>{product.name}</button>
+        <Link className={styles.productTitle} href={href} scroll={false}>{product.name}</Link>
         <div className={styles.productFooter}>
           <strong>{currency.format(product.price)}</strong>
           <button type="button" onClick={() => onAdd(product)} aria-label={`Adicionar ${product.name} à sacola`}><Plus size={19} /></button>
@@ -388,14 +301,11 @@ export default function Catalogo({ initialProducts }: { initialProducts?: Produc
   const [typeFilter, setTypeFilter] = useState(ALL);
   const [sizeFilter, setSizeFilter] = useState(ALL);
   const [search, setSearch] = useState("");
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const { cart, addToCart, changeQuantity } = useCart();
   const [favorites, setFavorites] = useState<Array<string | number>>([]);
-  const [selected, setSelected] = useState<Product | null>(null);
-  const [activeMediaId, setActiveMediaId] = useState("");
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [toast, setToast] = useState("");
 
   const availableTypes = catalogStructure[category] ?? [];
   const availableSizes = useMemo(() => {
@@ -418,8 +328,6 @@ export default function Catalogo({ initialProducts }: { initialProducts?: Produc
   }, [category, typeFilter, sizeFilter, search, products]);
 
   const featuredProducts = products.filter((product) => product.featured);
-  const selectedMediaItems = selected ? getProductMedia(selected) : [];
-  const selectedMedia = selectedMediaItems.find((media) => media.id === activeMediaId) ?? selectedMediaItems[0];
   const activeFilterCount = Number(category !== "Todas") + Number(typeFilter !== ALL) + Number(sizeFilter !== ALL) + Number(Boolean(search.trim()));
   const cartCount = cart.reduce((sum, item) => sum + item.cartQuantity, 0);
   const total = cart.reduce((sum, item) => sum + item.price * item.cartQuantity, 0);
@@ -437,50 +345,12 @@ export default function Catalogo({ initialProducts }: { initialProducts?: Produc
     setSearch("");
   }
 
-  function showToast(message: string) {
-    setToast(message);
-    window.setTimeout(() => setToast(""), 2400);
-  }
-
-  function addToCart(product: Product) {
-    const existing = cart.find((item) => item.id === product.id);
-    if (existing && existing.cartQuantity >= product.quantity) {
-      showToast("Essa é toda a quantidade disponível");
-      return;
-    }
-    setCart((current) => existing
-      ? current.map((item) => item.id === product.id ? { ...item, cartQuantity: item.cartQuantity + 1 } : item)
-      : [...current, { ...product, cartQuantity: 1 }],
-    );
-    showToast(`${product.name} foi para a sacola`);
-  }
-
-  function changeQuantity(id: string | number, delta: number) {
-    setCart((current) => current
-      .map((item) => item.id === id ? { ...item, cartQuantity: Math.min(item.quantity, Math.max(0, item.cartQuantity + delta)) } : item)
-      .filter((item) => item.cartQuantity > 0),
-    );
-  }
-
   function toggleFavorite(id: string | number) {
     setFavorites((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   }
 
   function openCart() {
-    setSelected(null);
     setCartOpen(true);
-  }
-
-  function openProduct(product: Product) {
-    setSelected(product);
-    setActiveMediaId(getProductMedia(product)[0].id);
-  }
-
-  function changeMedia(direction: number) {
-    if (!selectedMedia || selectedMediaItems.length < 2) return;
-    const currentIndex = selectedMediaItems.findIndex((media) => media.id === selectedMedia.id);
-    const nextIndex = (currentIndex + direction + selectedMediaItems.length) % selectedMediaItems.length;
-    setActiveMediaId(selectedMediaItems[nextIndex].id);
   }
 
   function handleCheckout(event: FormEvent<HTMLFormElement>) {
@@ -526,7 +396,7 @@ export default function Catalogo({ initialProducts }: { initialProducts?: Produc
         <section className={styles.featuredSection} id="destaques">
           <div className={styles.sectionHeading}><div><span className={styles.eyebrow}>Escolhas da Viviane</span><h2>Peças em destaque</h2></div><p>Uma seleção especial para você</p></div>
           <div className={styles.featuredGrid}>
-            {featuredProducts.map((product) => <ProductCard key={product.id} product={product} isFavorite={favorites.includes(product.id)} showFeatured onFavorite={toggleFavorite} onOpen={openProduct} onAdd={addToCart} />)}
+            {featuredProducts.map((product) => <ProductCard key={product.id} product={product} isFavorite={favorites.includes(product.id)} showFeatured onFavorite={toggleFavorite} onAdd={addToCart} />)}
           </div>
         </section>
 
@@ -545,7 +415,7 @@ export default function Catalogo({ initialProducts }: { initialProducts?: Produc
           </div>
 
           {visibleProducts.length > 0 ? (
-            <div className={styles.productGrid}>{visibleProducts.map((product) => <ProductCard key={product.id} product={product} isFavorite={favorites.includes(product.id)} onFavorite={toggleFavorite} onOpen={openProduct} onAdd={addToCart} />)}</div>
+            <div className={styles.productGrid}>{visibleProducts.map((product) => <ProductCard key={product.id} product={product} isFavorite={favorites.includes(product.id)} onFavorite={toggleFavorite} onAdd={addToCart} />)}</div>
           ) : (
             <div className={styles.emptySearch}><Search size={28} /><h3>Nenhuma peça por aqui</h3><p>Tente buscar outro nome, tamanho, tipo ou categoria.</p><button type="button" onClick={clearFilters}>Limpar filtros</button></div>
           )}
@@ -562,13 +432,10 @@ export default function Catalogo({ initialProducts }: { initialProducts?: Produc
 
       {cartCount > 0 && !cartOpen && <button className={styles.floatingCart} type="button" onClick={openCart}><span><ShoppingBag size={19} /><b>{cartCount}</b> {cartCount === 1 ? "peça" : "peças"}</span><strong>Ver sacola · {currency.format(total)}</strong></button>}
 
-      {selected && selectedMedia && <div className={styles.overlay} role="presentation" onMouseDown={() => setSelected(null)}><section className={styles.productModal} role="dialog" aria-modal="true" aria-labelledby="product-title" onMouseDown={(event) => event.stopPropagation()}><button className={styles.modalClose} type="button" onClick={() => setSelected(null)} aria-label="Fechar detalhes"><X size={21} /></button><div className={styles.mediaGallery}><div className={styles.mediaStage}>{selectedMedia.type === "video" && !selectedMedia.url ? <div className={styles.videoPlaceholder}><GarmentIllustration product={selected} view={selectedMedia.view} /><span className={styles.playButton}>▶</span><strong>Prévia do vídeo</strong><small>O vídeo enviado pela Viviane aparecerá aqui</small></div> : <ProductVisual product={selected} media={selectedMedia} />}{selectedMediaItems.length > 1 && <><button className={`${styles.mediaArrow} ${styles.mediaArrowLeft}`} type="button" onClick={() => changeMedia(-1)} aria-label="Mídia anterior"><ArrowLeft size={18} /></button><button className={`${styles.mediaArrow} ${styles.mediaArrowRight}`} type="button" onClick={() => changeMedia(1)} aria-label="Próxima mídia"><ArrowRight size={18} /></button></>}</div><div className={styles.mediaThumbs} aria-label="Fotos e vídeos da peça">{selectedMediaItems.map((media) => <button key={media.id} type="button" className={media.id === selectedMedia.id ? styles.activeMedia : ""} onClick={() => setActiveMediaId(media.id)}><span>{media.type === "video" ? "▶" : "◇"}</span>{media.label}</button>)}</div></div><div className={styles.modalContent}><span className={styles.eyebrow}>{selected.condition}</span><h2 id="product-title">{selected.name}</h2><strong className={styles.modalPrice}>{currency.format(selected.price)}</strong><div className={styles.detailChips}><span>Código <b>{selected.sku}</b></span><span>Categoria <b>{selected.category}</b></span>{selected.type && <span>Tipo <b>{selected.type}</b></span>}<span>Tamanho <b>{selected.size}</b></span><span>Disponível <b>{selected.quantity}</b></span></div><div className={styles.description}><h3>Sobre a peça</h3><p>{selected.description}</p></div><button className={styles.primaryButton} type="button" onClick={() => { addToCart(selected); setSelected(null); }}><ShoppingBag size={18} /> Adicionar à sacola</button></div></section></div>}
-
       {cartOpen && <div className={styles.overlay} role="presentation" onMouseDown={() => setCartOpen(false)}><aside className={styles.cartDrawer} role="dialog" aria-modal="true" aria-labelledby="cart-title" onMouseDown={(event) => event.stopPropagation()}><header className={styles.drawerHeader}><div><span className={styles.eyebrow}>Seu garimpo</span><h2 id="cart-title">Minha sacola <small>({cartCount})</small></h2></div><button type="button" onClick={() => setCartOpen(false)} aria-label="Fechar sacola"><X size={22} /></button></header>
         {cart.length === 0 ? <div className={styles.emptyCart}><span><ShoppingBag size={28} /></span><h3>Sua sacola está vazia</h3><p>Que tal conhecer os garimpos desta semana?</p><button className={styles.primaryButton} type="button" onClick={() => setCartOpen(false)}>Ver catálogo</button></div> : checkoutOpen ? <form className={styles.checkoutForm} onSubmit={handleCheckout}><button className={styles.backButton} type="button" onClick={() => setCheckoutOpen(false)}><ArrowLeft size={17} /> Voltar para a sacola</button><div><h3>Seus dados</h3><p>Eles serão enviados somente para a Viviane pelo WhatsApp.</p></div><label>Nome completo<input name="name" required autoComplete="name" placeholder="Como podemos te chamar?" /></label><label>Telefone<input name="phone" required type="tel" inputMode="tel" autoComplete="tel" placeholder="(35) 99999-9999" /></label><label>Endereço<textarea name="address" required autoComplete="street-address" rows={3} placeholder="Rua, número, bairro e cidade" /></label><div className={styles.orderSummary}><span>Total do pedido</span><strong>{currency.format(total)}</strong></div><button className={styles.whatsappButton} type="submit"><MessageIcon /> Enviar pedido pelo WhatsApp</button><small className={styles.formNote}>A disponibilidade e a forma de entrega ou retirada serão combinadas diretamente com a Viviane.</small></form> : <><div className={styles.cartItems}>{cart.map((item) => <article className={styles.cartItem} key={item.id}><div className={styles.cartThumb}><GarmentIllustration product={item} /></div><div className={styles.cartItemInfo}><div><h3>{item.name}</h3><p>{item.sku} · Tam. {item.size} · {item.condition}</p></div><div className={styles.cartControls}><span><button type="button" onClick={() => changeQuantity(item.id, -1)} aria-label="Diminuir quantidade">{item.cartQuantity === 1 ? <Trash2 size={14} /> : <Minus size={14} />}</button><b>{item.cartQuantity}</b><button type="button" onClick={() => changeQuantity(item.id, 1)} disabled={item.cartQuantity >= item.quantity} aria-label="Aumentar quantidade"><Plus size={14} /></button></span><strong>{currency.format(item.price * item.cartQuantity)}</strong></div></div></article>)}</div><div className={styles.cartFooter}><div><span>Total</span><strong>{currency.format(total)}</strong></div><button className={styles.primaryButton} type="button" onClick={() => setCheckoutOpen(true)}>Continuar <ArrowRight size={18} /></button><small>Você ainda não está reservando as peças.</small></div></>}
       </aside></div>}
 
-      {toast && <div className={styles.toast}><Check size={17} />{toast}</div>}
     </div>
   );
 }

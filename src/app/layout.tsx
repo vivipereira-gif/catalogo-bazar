@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { DM_Sans, Playfair_Display } from "next/font/google";
+import { CartProvider } from "./cart-context";
 import "./globals.css";
 
 const bodyFont = DM_Sans({ subsets: ["latin"], variable: "--font-body" });
@@ -14,10 +15,10 @@ export const metadata: Metadata = {
     "Roupas bem cuidadas, preços gentis e uma nova história para cada peça.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children, modal }: LayoutProps<"/">) {
   return (
     <html lang="pt-BR" className={`${bodyFont.variable} ${displayFont.variable}`}>
-      <body>{children}</body>
+      <body><CartProvider>{children}{modal}</CartProvider></body>
     </html>
   );
 }

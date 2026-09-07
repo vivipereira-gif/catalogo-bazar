@@ -139,6 +139,14 @@ A responsável pelo bazar precisa de uma área protegida para:
 - O SKU aparece nos detalhes e na sacola da vitrine e segue na mensagem enviada ao WhatsApp para facilitar a identificação pela Viviane.
 - Pendente no Dashboard do Supabase: revisar `Authentication > URL Configuration` e configurar SMTP próprio antes da produção.
 
+## Atualização de 7 de setembro de 2026
+
+- Cada peça publicada passou a ter uma URL compartilhável em `/peca/[slug]`, formada pelo nome legível e pelo SKU imutável.
+- A navegação iniciada no catálogo mantém a vitrine ao fundo e abre os detalhes em modal; o mesmo endereço aberto diretamente renderiza uma página completa da peça.
+- Os detalhes oferecem compartilhamento nativo ou cópia do link e geram metadados com nome, descrição e foto para a prévia em aplicativos como o WhatsApp.
+- A implementação não adicionou migration nem alterou registros existentes: o slug é derivado em tempo de execução e a peça é localizada pelo SKU único.
+- Lint, TypeScript, build de produção, rota direta com peça real, redirecionamento canônico e resposta 404 foram validados.
+
 ### Ponto de retomada após a ativação
 
 - Viviane está realizando os testes manuais do painel e da vitrine.

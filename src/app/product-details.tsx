@@ -79,7 +79,7 @@ export default function ProductDetails({ product, modal = false }: { product: Ca
         <div className={styles.detailChips}><span>Código <b>{product.sku}</b></span><span>Categoria <b>{product.category}</b></span>{product.type && <span>Tipo <b>{product.type}</b></span>}<span>Tamanho <b>{product.size}</b></span><span>Disponível <b>{product.quantity}</b></span></div>
         <div className={styles.description}><h2>Sobre a peça</h2><p>{product.description}</p></div>
         <div className={styles.productActions}>
-          <button className={styles.primaryButton} type="button" onClick={addProduct}><ShoppingBag size={18} /> Adicionar à sacola</button>
+          <button className={styles.primaryButton} type="button" onClick={addProduct}><ShoppingBag size={18} /> Reservar a peça</button>
           <button className={styles.shareButton} type="button" onClick={shareProduct}><Share2 size={17} /> Compartilhar peça</button>
         </div>
       </div>

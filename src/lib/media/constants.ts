@@ -15,6 +15,14 @@ export const MEDIA_LIMITS = {
   audioBitrate: 64_000,
 } as const;
 
+export const SHARE_IMAGE = {
+  fileName: "share.jpg",
+  width: 1200,
+  height: 630,
+  quality: 0.82,
+  contentType: "image/jpeg",
+} as const;
+
 export function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(0)} KB`;

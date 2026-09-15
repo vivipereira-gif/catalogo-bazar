@@ -3,6 +3,7 @@ import "server-only";
 import { cache } from "react";
 import { hasSupabasePublicConfig } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
+import { SHARE_IMAGE } from "@/lib/media/constants";
 import { skuFromSlug, type CatalogProduct, type Garment } from "./types";
 
 const garments: Record<string, Garment> = {
@@ -17,7 +18,7 @@ const garments: Record<string, Garment> = {
 };
 
 const tones = ["rose", "sage", "cream", "blue", "lilac"];
-const productSelect = "id, sku, name, description, price, size, category, subtype, stock, featured, product_media(*)";
+const productSelect = "id, sku, name, description, price, size, category, subtype, stock, featured, updated_at, product_media(*)";
 
 type ProductRow = {
   id: string;
@@ -30,6 +31,7 @@ type ProductRow = {
   subtype: string | null;
   stock: number;
   featured: boolean;
+  updated_at: string;
   product_media: Array<{
     id: string;
     kind: "image" | "video";
@@ -59,6 +61,7 @@ function mapProduct(product: ProductRow, publicUrl: (path: string) => string): C
     garment: garments[product.subtype ?? product.category] ?? "shirt",
     tone: toneFor(product.sku),
     featured: product.featured,
+    shareImageUrl: `${publicUrl(`${product.id}/${SHARE_IMAGE.fileName}`)}?v=${encodeURIComponent(product.updated_at)}`,
     media: (product.product_media ?? [])
       .sort((a, b) => a.sort_order - b.sort_order)
       .map((media) => ({

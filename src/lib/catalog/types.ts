@@ -32,6 +32,7 @@ export type CatalogProduct = {
   description: string;
   featured: boolean;
   media?: ProductMedia[];
+  shareImageUrl?: string;
 };
 
 export type CartItem = CatalogProduct & { cartQuantity: number };

@@ -31,7 +31,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { formatBytes, MEDIA_LIMITS } from "@/lib/media/constants";
-import { processImage } from "@/lib/media/images";
+import { processImage, processShareImage } from "@/lib/media/images";
 import { processVideo } from "@/lib/media/video";
 import {
   DEFAULT_HELPER_PERMISSIONS,
@@ -56,6 +56,32 @@ async function requestProductAction(productId: string, action: ProductAction) {
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || "Não foi possível atualizar a peça.");
   return result as { deleted?: boolean; product?: { status: ProductStatus; featured: boolean; stock: number } };
+}
+
+async function uploadProductShareImage(productId: string, source: Blob) {
+  const file = await processShareImage(source);
+  const authorizationResponse = await fetch("/api/admin/storage/upload-url", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ productId, kind: "share" }),
+  });
+  const authorization = await authorizationResponse.json();
+  if (!authorizationResponse.ok) {
+    throw new Error(authorization.error || "Não foi possível autorizar a capa de compartilhamento.");
+  }
+
+  const { error } = await createClient().storage
+    .from("product-media")
+    .uploadToSignedUrl(String(authorization.path), String(authorization.token), file, {
+      contentType: file.type,
+    });
+  if (error) throw error;
+}
+
+async function fetchImageBlob(url: string) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error("Não foi possível carregar a capa para compartilhamento.");
+  return response.blob();
 }
 
 const subtypes: Record<string, string[]> = {
@@ -594,6 +620,16 @@ function EditProduct({ product, currentUserId, demoMode, canManageMedia, onCance
         })) as ProductMedia[];
       }
 
+      if (canManageMedia) {
+        const cover = media.find((item) => item.kind === "image" && item.is_cover);
+        if (!cover) throw new Error("Não foi possível identificar a capa da peça.");
+        setProcessing("Gerando capa de compartilhamento…");
+        const source = isQueuedMedia(cover)
+          ? cover.file
+          : await fetchImageBlob(cover.public_url || "");
+        await uploadProductShareImage(product.id, source);
+      }
+
       const normalizedExisting = media
         .filter((item) => !isQueuedMedia(item))
         .map((item) => ({ ...item })) as ProductMedia[];
@@ -759,6 +795,11 @@ function NewProduct({ currentUserId, demoMode, permissions, onCreated }: { curre
         if (mediaError) throw mediaError;
         uploaded.push({ ...savedMedia, public_url: supabase.storage.from("product-media").getPublicUrl(path).data.publicUrl });
       }
+      const cover = media.find((item) => item.kind === "image" && item.is_cover)
+        ?? media.find((item) => item.kind === "image");
+      if (!cover) throw new Error("Não foi possível identificar a capa da peça.");
+      setProcessing("Gerando capa de compartilhamento…");
+      await uploadProductShareImage(product.id, cover.file);
       if (targetStatus === "published") {
         await requestProductAction(product.id, "publish");
       } else if (targetStatus === "pending_review") {

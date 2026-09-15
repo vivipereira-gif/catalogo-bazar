@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 
 const requestSchema = z.object({
   productId: z.uuid(),
-  kind: z.enum(["image", "video"]),
+  kind: z.enum(["image", "video", "share"]),
 });
 
 export async function POST(request: Request) {
@@ -47,11 +47,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Você não pode enviar arquivos para esta peça." }, { status: 403 });
   }
 
-  const extension = parsed.data.kind === "image" ? "webp" : "mp4";
-  const path = `${parsed.data.productId}/${crypto.randomUUID()}.${extension}`;
+  const isShareImage = parsed.data.kind === "share";
+  const extension = parsed.data.kind === "image" ? "webp" : parsed.data.kind === "video" ? "mp4" : "jpg";
+  const path = isShareImage
+    ? `${parsed.data.productId}/share.${extension}`
+    : `${parsed.data.productId}/${crypto.randomUUID()}.${extension}`;
   const { data, error } = await admin.storage
     .from("product-media")
-    .createSignedUploadUrl(path, { upsert: false });
+    .createSignedUploadUrl(path, { upsert: isShareImage });
 
   if (error) {
     return NextResponse.json({ error: "Não foi possível autorizar o envio do arquivo." }, { status: 500 });

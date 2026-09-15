@@ -40,7 +40,7 @@ export default function ProductDetails({ product, modal = false }: { product: Ca
   async function shareProduct() {
     const shareData = {
       title: product.name,
-      text: `${product.name} (${product.sku}) — Bazar da Ana Rebeca`,
+      text: `${product.name} (${product.sku}) — Bazar da Ana Rebeca\nTamanho: ${product.size}\nValor: ${currency.format(product.price)}`,
       url: window.location.href,
     };
 

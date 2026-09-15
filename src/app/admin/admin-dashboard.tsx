@@ -5,6 +5,7 @@
 import {
   Archive,
   ArchiveRestore,
+  CalendarDays,
   Check,
   ChevronRight,
   Clock3,
@@ -287,6 +288,21 @@ function MediaThumb({ product }: { product: AdminProduct }) {
 
 function Status({ status }: { status: ProductStatus }) { return <span className={styles.status} data-status={status}>{statusText[status]}</span>; }
 
+function productDateKey(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatProductDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Data indisponível";
+  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" }).format(date);
+}
+
 function Products({ products, currentUserId, permissions, updateProduct, reviewProduct, manageProduct, editProduct }: {
   products: AdminProduct[];
   currentUserId: string;
@@ -298,6 +314,8 @@ function Products({ products, currentUserId, permissions, updateProduct, reviewP
 }) {
   const [filter, setFilter] = useState<ProductStatus | "all">("all");
   const [query, setQuery] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const normalizedQuery = query.trim().toLocaleLowerCase("pt-BR");
   const compactQuery = query.toLocaleUpperCase("pt-BR").replace(/[^A-Z0-9]/g, "");
   const visible = products.filter((product) => {
@@ -305,7 +323,10 @@ function Products({ products, currentUserId, permissions, updateProduct, reviewP
     const matchesQuery = !normalizedQuery ||
       product.name.toLocaleLowerCase("pt-BR").includes(normalizedQuery) ||
       product.sku.replace(/[^A-Z0-9]/g, "").includes(compactQuery);
-    return matchesStatus && matchesQuery;
+    const createdDate = productDateKey(product.created_at);
+    const matchesDateFrom = !dateFrom || createdDate >= dateFrom;
+    const matchesDateTo = !dateTo || createdDate <= dateTo;
+    return matchesStatus && matchesQuery && matchesDateFrom && matchesDateTo;
   });
 
   async function confirmDelete(product: AdminProduct) {
@@ -319,7 +340,15 @@ function Products({ products, currentUserId, permissions, updateProduct, reviewP
   return <>
     <PageTitle eyebrow="Seu acervo" title="Todas as peças" text="Acompanhe o caminho de cada peça, do cadastro até a venda." />
     <div className={styles.productTools}>
-      <label className={styles.productSearch}><Search size={17} /><span>Buscar peça</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Código ou nome — ex.: AR-000042" /></label>
+      <div className={styles.productFilterFields}>
+        <label className={styles.productSearch}><Search size={17} /><span>Buscar peça</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Código ou nome — ex.: AR-000042" /></label>
+        <div className={styles.dateFilters} role="group" aria-label="Filtrar pela data de cadastro">
+          <CalendarDays size={17} aria-hidden="true" />
+          <label><span>Cadastrada de</span><input type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => setDateFrom(event.target.value)} /></label>
+          <label><span>Até</span><input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} /></label>
+          {(dateFrom || dateTo) && <button type="button" onClick={() => { setDateFrom(""); setDateTo(""); }}>Limpar datas</button>}
+        </div>
+      </div>
       <div className={styles.filters}>{(["all", "published", "reserved", "pending_review", "draft", "rejected", "sold", "hidden"] as const).map((item) => <button className={filter === item ? styles.selectedFilter : ""} key={item} onClick={() => setFilter(item)}>{item === "all" ? "Todas" : statusText[item]}</button>)}</div>
     </div>
     <section className={styles.panel}>{visible.length ? <div className={styles.cards}>{visible.map((product) => {
@@ -334,7 +363,7 @@ function Products({ products, currentUserId, permissions, updateProduct, reviewP
           <header className={styles.cardLabels}><Status status={product.status} /><b>{product.sku}</b></header>
           <h3>{product.name}</h3>
           <p>{product.description || "Sem descrição"}</p>
-          <div><strong>{product.price.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong><small>Estoque: {product.stock}</small></div>
+          <div className={styles.cardFacts}><strong>{product.price.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong><span><small>Estoque: {product.stock}</small><small><CalendarDays size={12} /> Cadastrada em {formatProductDate(product.created_at)}</small></span></div>
           {product.review_note && <em>“{product.review_note}”</em>}
           <footer>
             {canEdit && <button onClick={() => editProduct(product)}><Pencil size={15} /> Editar</button>}

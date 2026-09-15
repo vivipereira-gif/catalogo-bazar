@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, permanentRedirect } from "next/navigation";
 import { getPublishedProductBySlug } from "@/lib/catalog/products";
-import { getProductMedia, productSlug } from "@/lib/catalog/types";
+import { currency, getProductMedia, productSlug } from "@/lib/catalog/types";
 import ProductDetails from "@/app/product-details";
 
 export async function generateMetadata({ params }: PageProps<"/peca/[slug]">): Promise<Metadata> {
@@ -10,8 +10,8 @@ export async function generateMetadata({ params }: PageProps<"/peca/[slug]">): P
   if (!product) return { title: "Peça não encontrada | Bazar da Ana Rebeca" };
 
   const image = getProductMedia(product).find((media) => media.type === "image" && media.url)?.url;
-  const fallbackDescription = `${product.name}, tamanho ${product.size}, por ${product.price.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}.`;
-  const description = (product.description || fallbackDescription).replace(/\s+/g, " ").trim().slice(0, 220);
+  const productDescription = product.description.replace(/\s+/g, " ").trim();
+  const description = `Tamanho: ${product.size} · Valor: ${currency.format(product.price)}.${productDescription ? ` ${productDescription}` : ""}`.slice(0, 220);
 
   return {
     title: `${product.name} | Bazar da Ana Rebeca`,
